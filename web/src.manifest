@@ -25,6 +25,7 @@ src/core/csrf.js
 src/core/endpoints.js
 src/core/resume-stream-recovery.js
 src/core/fetch-rewrite.js
+src/core/tts-voice-response.js
 src/core/public-api.js
 
 bundle iife patches/web_optimizations.js
