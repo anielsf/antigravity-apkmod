@@ -62,6 +62,16 @@ def stage_assets(staging_dir, no_bypass=False):
     shutil.copytree(env_src, env_dst)
     print(f"[OK] Staged env assets.")
 
+    # Stage embedded builtin skills (jarvis-persona, optimizations, etc.)
+    skills_src = os.path.join(PROJECT_ROOT, "skills")
+    if os.path.isdir(skills_src):
+        skills_dst = os.path.join(assets_dir, "skills")
+        print(f"[*] Staging embedded skills from {skills_src} -> {skills_dst}...")
+        if os.path.exists(skills_dst):
+            shutil.rmtree(skills_dst)
+        shutil.copytree(skills_src, skills_dst)
+        print(f"[OK] Staged embedded skills.")
+
     print(f"[OK] Staged all assets into {assets_dir}")
     return assets_dir
 

@@ -60,6 +60,13 @@ public final class CoreInstaller {
         rm.writeNetworkConfig();
         rm.startNetworkMonitor();
         OnboardingSeeder.seed(ctx, rm.getAppDataDir(), rm.getProjectsDir());
+        // Auto-seed embedded builtin skills from assets/skills into ~/.gemini/config/skills
+        try {
+            File skillsTarget = new File(ctx.getFilesDir(), ".gemini/config/skills");
+            AssetUnpacker.unpackTree(ctx.getAssets(), "skills", skillsTarget);
+        } catch (Throwable t) {
+            Log.w(TAG, "embedded skills unpack: " + t.getMessage());
+        }
         // Always ensure fallback shells and open-url shims are installed
         // in runtime/bin immediately regardless of whether the bionic prefix is extracted.
         ShellBridgeInstaller.installFallbackBridges(rm.getBinDir(), ctx);
