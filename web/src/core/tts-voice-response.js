@@ -27,10 +27,8 @@
       return ttsEnabled;
     },
     speak: function(text) {
-      if (!ttsEnabled || !window.speechSynthesis || !text) return;
+      if (!ttsEnabled || !text) return;
       try {
-        window.speechSynthesis.cancel(); // Stop any pending speech
-        
         // Clean markdown symbols, code blocks, and URLs so speech is natural
         var cleanText = text
           .replace(/```[\s\S]*?```/g, ' [código omitido] ') // Skip long code blocks in voice
@@ -43,18 +41,26 @@
 
         if (!cleanText) return;
 
-        var utterance = new SpeechSynthesisUtterance(cleanText);
-        utterance.lang = 'es-ES';
-        utterance.rate = 1.05; // Slightly faster for natural flow
-        utterance.pitch = 1.0;
+        // 1. Direct Native Android TTS (Samsung / Google TTS engine)
+        if (window.Android && typeof window.Android.speak === 'function') {
+          console.log('[TTS] Speaking via native AndroidBridge.speak (' + cleanText.length + ' chars)');
+          window.Android.speak(cleanText);
+          return;
+        }
 
-        // Try to pick a natural Spanish voice
-        var voices = window.speechSynthesis.getVoices();
-        var esVoice = voices.find(function(v) { return v.lang && v.lang.startsWith('es'); });
-        if (esVoice) utterance.voice = esVoice;
-
-        window.speechSynthesis.speak(utterance);
-        console.log('[TTS] Speaking response (' + cleanText.length + ' chars)');
+        // 2. Web Speech API fallback
+        if (window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+          var utterance = new SpeechSynthesisUtterance(cleanText);
+          utterance.lang = 'es-ES';
+          utterance.rate = 1.05;
+          utterance.pitch = 1.0;
+          var voices = window.speechSynthesis.getVoices();
+          var esVoice = voices.find(function(v) { return v.lang && v.lang.startsWith('es'); });
+          if (esVoice) utterance.voice = esVoice;
+          window.speechSynthesis.speak(utterance);
+          console.log('[TTS] Speaking via window.speechSynthesis (' + cleanText.length + ' chars)');
+        }
       } catch (err) {
         console.warn('[TTS] Speech error:', err);
       }

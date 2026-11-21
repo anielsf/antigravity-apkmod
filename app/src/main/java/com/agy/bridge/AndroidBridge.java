@@ -33,6 +33,60 @@ public final class AndroidBridge {
         this.themeBridge = new ThemeBridge(theme);
         this.engine = new EngineBridge(runtime);
         this.config = new EngineConfigJson(appContext, runtime, engine, shizuku, themeBridge);
+        initTts(appContext);
+    }
+
+    private android.speech.tts.TextToSpeech tts;
+    private volatile boolean ttsReady = false;
+
+    private void initTts(final Context context) {
+        try {
+            tts = new android.speech.tts.TextToSpeech(context, new android.speech.tts.TextToSpeech.OnInitListener() {
+                @Override
+                public void onInit(int status) {
+                    if (status == android.speech.tts.TextToSpeech.SUCCESS) {
+                        try {
+                            java.util.Locale loc = new java.util.Locale("es", "ES");
+                            int res = tts.setLanguage(loc);
+                            if (res == android.speech.tts.TextToSpeech.LANG_MISSING_DATA || res == android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED) {
+                                tts.setLanguage(new java.util.Locale("es"));
+                            }
+                            ttsReady = true;
+                            android.util.Log.i("AndroidBridge", "Native TextToSpeech initialized successfully (Spanish)");
+                        } catch (Throwable t) {
+                            android.util.Log.w("AndroidBridge", "TTS language config error", t);
+                        }
+                    }
+                }
+            });
+        } catch (Throwable t) {
+            android.util.Log.e("AndroidBridge", "Failed to init TextToSpeech", t);
+        }
+    }
+
+    @JavascriptInterface
+    public void speak(String text) {
+        if (text == null || text.trim().isEmpty()) return;
+        if (tts != null && ttsReady) {
+            try {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                    tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "agy_tts");
+                } else {
+                    tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null);
+                }
+            } catch (Throwable t) {
+                android.util.Log.w("AndroidBridge", "TTS speak failed", t);
+            }
+        }
+    }
+
+    @JavascriptInterface
+    public void stopSpeaking() {
+        if (tts != null && ttsReady) {
+            try {
+                tts.stop();
+            } catch (Throwable ignored) {}
+        }
     }
 
     /** Host activity, used to dismiss the native splash once the UI has painted. */
