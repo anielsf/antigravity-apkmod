@@ -655,7 +655,7 @@ installFetchRewrite();
 
 /**
  * tts-voice-response.js - Native Speech Synthesis for Antigravity AI Responses.
- * Automatically speaks out assistant responses in Spanish using the device TTS engine.
+ * Automatically speaks out assistant responses in Spanish and adds a quick speaker button.
  */
 (function() {
   if (typeof window === 'undefined') return;
@@ -675,8 +675,13 @@ installFetchRewrite();
         ttsEnabled = !ttsEnabled;
       }
       try { localStorage.setItem('ag_voice_tts_enabled', String(ttsEnabled)); } catch(e) {}
-      if (!ttsEnabled && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
+      if (!ttsEnabled) {
+        if (window.Android && typeof window.Android.stopSpeaking === 'function') {
+          window.Android.stopSpeaking();
+        }
+        if (window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+        }
       }
       console.log('[TTS] Voice responses enabled:', ttsEnabled);
       return ttsEnabled;
@@ -684,9 +689,8 @@ installFetchRewrite();
     speak: function(text) {
       if (!ttsEnabled || !text) return;
       try {
-        // Clean markdown symbols, code blocks, and URLs so speech is natural
         var cleanText = text
-          .replace(/```[\s\S]*?```/g, ' [código omitido] ') // Skip long code blocks in voice
+          .replace(/```[\s\S]*?```/g, ' [código omitido] ')
           .replace(/`([^`]+)`/g, '$1')
           .replace(/!\[.*?\]\(.*?\)/g, '')
           .replace(/\[(.*?)\]\(.*?\)/g, '$1')
@@ -696,14 +700,14 @@ installFetchRewrite();
 
         if (!cleanText) return;
 
-        // 1. Direct Native Android TTS (Samsung / Google TTS engine)
+        // 1. AndroidBridge native TextToSpeech engine
         if (window.Android && typeof window.Android.speak === 'function') {
-          console.log('[TTS] Speaking via native AndroidBridge.speak (' + cleanText.length + ' chars)');
+          console.log('[TTS] Speaking via AndroidBridge.speak (' + cleanText.length + ' chars)');
           window.Android.speak(cleanText);
           return;
         }
 
-        // 2. Web Speech API fallback
+        // 2. WebView speech synthesis fallback
         if (window.speechSynthesis) {
           window.speechSynthesis.cancel();
           var utterance = new SpeechSynthesisUtterance(cleanText);
@@ -722,47 +726,52 @@ installFetchRewrite();
     }
   };
 
-  // Watch for assistant turn completion in the DOM to speak the answer
-  var lastSpokenText = '';
-  var isObserving = false;
+  // Robust observer: detects any completed bubble in the chat view
+  var lastSpoken = '';
+  var debounceTimer = null;
 
-  function observeResponses() {
-    if (isObserving) return;
-    var root = document.getElementById('root') || document.body;
-    if (!root) return;
-
-    var observer = new MutationObserver(function(mutations) {
-      // Find all completed assistant messages
-      var messages = document.querySelectorAll('[data-testid="agent-turn"], [data-message-author="assistant"], .agent-message-content');
-      if (messages.length === 0) {
-        // Fallback selector for chat bubbles
-        messages = document.querySelectorAll('.prose');
+  function checkForNewResponses() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(function() {
+      // Find all message containers
+      var candidateElements = document.querySelectorAll(
+        '.markdown, .prose, [data-message-author="assistant"], [role="presentation"] p'
+      );
+      if (candidateElements.length === 0) {
+        candidateElements = document.querySelectorAll('p');
       }
-      if (messages.length > 0) {
-        var lastMsg = messages[messages.length - 1];
-        // Ensure it is not currently streaming/typing (check for streaming indicators)
-        var isStreaming = document.querySelector('.animate-pulse, [data-testid="send-button-pending"], .cursor-default.animate-spin');
-        if (!isStreaming) {
-          var currentText = (lastMsg.innerText || '').trim();
-          if (currentText && currentText !== lastSpokenText && currentText.length > 3) {
-            // Check if user recently used voice or if auto-read is on
-            lastSpokenText = currentText;
-            window.__agTts.speak(currentText);
+
+      if (candidateElements.length > 0) {
+        var lastElem = candidateElements[candidateElements.length - 1];
+        var text = (lastElem.innerText || lastElem.textContent || '').trim();
+
+        // Check that text is long enough and not from user input box
+        if (text && text.length > 10 && text !== lastSpoken && !lastElem.closest('textarea, [contenteditable="true"]')) {
+          // Verify user is not currently typing / streaming
+          var typingIndicators = document.querySelectorAll('.animate-pulse, [data-testid="send-button-pending"]');
+          if (typingIndicators.length === 0) {
+            lastSpoken = text;
+            console.log('[TTS] Auto-triggering speech for latest response');
+            window.__agTts.speak(text);
           }
         }
       }
-    });
+    }, 800); // 800ms debounce after last DOM mutation
+  }
 
-    observer.observe(root, { childList: true, subtree: true, characterData: true });
-    isObserving = true;
-    console.log('[TTS] Observer attached to DOM');
+  function startObserver() {
+    var target = document.getElementById('root') || document.body;
+    if (!target) return;
+    var observer = new MutationObserver(checkForNewResponses);
+    observer.observe(target, { childList: true, subtree: true, characterData: true });
+    console.log('[TTS] Active mutation observer watching conversation');
   }
 
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(observeResponses, 1500);
+    setTimeout(startObserver, 1000);
   } else {
     window.addEventListener('DOMContentLoaded', function() {
-      setTimeout(observeResponses, 1500);
+      setTimeout(startObserver, 1000);
     });
   }
 })();
