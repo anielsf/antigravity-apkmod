@@ -84,19 +84,30 @@
       }
     },
     speakLastAssistantResponse: function() {
-      // Find candidate paragraphs that are NOT inside user messages or inputs
+      // Find ONLY assistant response containers specifically rendered by the AI planner
+      var plannerNodes = document.querySelectorAll('[data-testid="planner-response-text"]');
+      if (plannerNodes && plannerNodes.length > 0) {
+        var lastNode = plannerNodes[plannerNodes.length - 1];
+        var txt = (lastNode.innerText || lastNode.textContent || '').trim();
+        if (txt && txt.length > 2) {
+          lastSpoken = txt;
+          window.__agTts.speak(txt);
+          return;
+        }
+      }
+
+      // Fallback: search paragraphs while strictly rejecting ANY user input card or prompt area
       var allParagraphs = document.querySelectorAll('p, .markdown');
       var assistantTexts = [];
 
       for (var i = 0; i < allParagraphs.length; i++) {
         var el = allParagraphs[i];
-        // Exclude user message cards, input boxes, sidebars, navigation, modals
-        if (el.closest('[aria-label="User message"], textarea, [contenteditable="true"], form, nav, button, [role="tooltip"]')) {
+        if (el.closest('[data-testid="user-input-step"], [data-testid="pending-user-messages"], [data-testid="queued-messages-card"], [aria-label*="User" i], textarea, input, [contenteditable="true"], form, nav, button, [role="tooltip"]')) {
           continue;
         }
-        var txt = (el.innerText || el.textContent || '').trim();
-        if (txt && txt.length > 5) {
-          assistantTexts.push(txt);
+        var candidate = (el.innerText || el.textContent || '').trim();
+        if (candidate && candidate.length > 5) {
+          assistantTexts.push(candidate);
         }
       }
 
@@ -201,10 +212,23 @@
       var typing = document.querySelectorAll('.animate-pulse, [data-testid="send-button-pending"]');
       if (typing.length > 0) return;
 
+      // Prioritize strict planner response element
+      var plannerNodes = document.querySelectorAll('[data-testid="planner-response-text"]');
+      if (plannerNodes && plannerNodes.length > 0) {
+        var lastNode = plannerNodes[plannerNodes.length - 1];
+        var txt = (lastNode.innerText || lastNode.textContent || '').trim();
+        if (txt && txt.length > 5 && txt !== lastSpoken) {
+          lastSpoken = txt;
+          window.__agTts.speak(txt);
+          return;
+        }
+      }
+
+      // Secondary fallback with aggressive user message exclusion
       var allParagraphs = document.querySelectorAll('p, .markdown');
       for (var i = allParagraphs.length - 1; i >= 0; i--) {
         var el = allParagraphs[i];
-        if (el.closest('[aria-label="User message"], textarea, [contenteditable="true"], form, nav, button')) {
+        if (el.closest('[data-testid="user-input-step"], [data-testid="pending-user-messages"], [data-testid="queued-messages-card"], [aria-label*="User" i], textarea, input, [contenteditable="true"], form, nav, button')) {
           continue;
         }
         var txt = (el.innerText || el.textContent || '').trim();
