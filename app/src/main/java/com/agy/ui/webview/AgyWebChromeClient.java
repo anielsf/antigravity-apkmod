@@ -5,6 +5,7 @@ import android.os.Message;
 import android.util.Log;
 import android.webkit.ConsoleMessage;
 import android.webkit.ValueCallback;
+import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 
@@ -64,5 +65,27 @@ public final class AgyWebChromeClient extends WebChromeClient {
             return fileChooserCallback.onShowFileChooser(webView, filePathCallback, fileChooserParams);
         }
         return super.onShowFileChooser(webView, filePathCallback, fileChooserParams);
+    }
+
+    /**
+     * Grants the WebView access to the microphone (and camera) when the page
+     * calls navigator.mediaDevices.getUserMedia({audio: true}).
+     * Without this override the WebView silently denies all media capture requests.
+     */
+    @Override
+    public void onPermissionRequest(PermissionRequest request) {
+        String[] resources = request.getResources();
+        java.util.List<String> granted = new java.util.ArrayList<>();
+        for (String res : resources) {
+            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(res) ||
+                    PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(res)) {
+                granted.add(res);
+            }
+        }
+        if (!granted.isEmpty()) {
+            request.grant(granted.toArray(new String[0]));
+        } else {
+            request.deny();
+        }
     }
 }

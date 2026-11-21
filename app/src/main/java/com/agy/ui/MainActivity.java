@@ -51,6 +51,7 @@ public class MainActivity extends Activity
 
     private static final String TAG = "MainActivity";
     private static final int REQUEST_STORAGE = 100;
+    private static final int REQUEST_MIC = 101;
     private static final int REQUEST_FILE_CHOOSER = 1002;
     private static final long SPLASH_TIMEOUT_MS = 60000;
     private static final long POLL_STARTUP_INTERVAL_MS = 50;
@@ -163,6 +164,7 @@ public class MainActivity extends Activity
 
         splashDeadline = System.currentTimeMillis() + SPLASH_TIMEOUT_MS;
         requestStoragePermissions();
+        requestMicrophonePermission();
 
         startCoreService();
     }
@@ -348,6 +350,18 @@ public class MainActivity extends Activity
                         android.Manifest.permission.READ_EXTERNAL_STORAGE,
                         android.Manifest.permission.WRITE_EXTERNAL_STORAGE
                 }, REQUEST_STORAGE);
+            }
+        }
+    }
+
+    /** Requests RECORD_AUDIO permission at runtime (required for Android 6+). */
+    private void requestMicrophonePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                    != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(
+                        new String[]{android.Manifest.permission.RECORD_AUDIO},
+                        REQUEST_MIC);
             }
         }
     }
