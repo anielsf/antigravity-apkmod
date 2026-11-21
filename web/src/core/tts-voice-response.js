@@ -1,6 +1,6 @@
 /**
  * tts-voice-response.js - Native Speech Synthesis for Antigravity AI Responses.
- * Automatically speaks out assistant responses in Spanish and adds a quick speaker button.
+ * Adds a floating speaker button and auto-reads assistant turns in Spanish.
  */
 (function() {
   if (typeof window === 'undefined') return;
@@ -11,28 +11,12 @@
     if (stored !== null) ttsEnabled = (stored === 'true');
   } catch(e) {}
 
+  var lastSpoken = '';
+
   window.__agTts = {
     enabled: ttsEnabled,
-    toggle: function(val) {
-      if (typeof val === 'boolean') {
-        ttsEnabled = val;
-      } else {
-        ttsEnabled = !ttsEnabled;
-      }
-      try { localStorage.setItem('ag_voice_tts_enabled', String(ttsEnabled)); } catch(e) {}
-      if (!ttsEnabled) {
-        if (window.Android && typeof window.Android.stopSpeaking === 'function') {
-          window.Android.stopSpeaking();
-        }
-        if (window.speechSynthesis) {
-          window.speechSynthesis.cancel();
-        }
-      }
-      console.log('[TTS] Voice responses enabled:', ttsEnabled);
-      return ttsEnabled;
-    },
     speak: function(text) {
-      if (!ttsEnabled || !text) return;
+      if (!text) return;
       try {
         var cleanText = text
           .replace(/```[\s\S]*?```/g, ' [código omitido] ')
@@ -45,14 +29,14 @@
 
         if (!cleanText) return;
 
-        // 1. AndroidBridge native TextToSpeech engine
+        // Native Android TTS
         if (window.Android && typeof window.Android.speak === 'function') {
-          console.log('[TTS] Speaking via AndroidBridge.speak (' + cleanText.length + ' chars)');
+          console.log('[TTS] Speaking via native AndroidBridge.speak (' + cleanText.length + ' chars)');
           window.Android.speak(cleanText);
           return;
         }
 
-        // 2. WebView speech synthesis fallback
+        // Web Speech API fallback
         if (window.speechSynthesis) {
           window.speechSynthesis.cancel();
           var utterance = new SpeechSynthesisUtterance(cleanText);
@@ -63,60 +47,110 @@
           var esVoice = voices.find(function(v) { return v.lang && v.lang.startsWith('es'); });
           if (esVoice) utterance.voice = esVoice;
           window.speechSynthesis.speak(utterance);
-          console.log('[TTS] Speaking via window.speechSynthesis (' + cleanText.length + ' chars)');
         }
       } catch (err) {
         console.warn('[TTS] Speech error:', err);
       }
+    },
+    speakLastResponse: function() {
+      // Find the last visible paragraph or message block in the chat
+      var nodes = document.querySelectorAll('p, .markdown, .prose');
+      for (var i = nodes.length - 1; i >= 0; i--) {
+        var node = nodes[i];
+        if (node.closest('textarea, [contenteditable="true"], form, nav')) continue;
+        var txt = (node.innerText || node.textContent || '').trim();
+        if (txt && txt.length > 5) {
+          console.log('[TTS] Manual speak triggered for:', txt.slice(0, 40));
+          window.__agTts.speak(txt);
+          return;
+        }
+      }
+      if (lastSpoken) {
+        window.__agTts.speak(lastSpoken);
+      }
     }
   };
 
-  // Robust observer: detects any completed bubble in the chat view
-  var lastSpoken = '';
-  var debounceTimer = null;
+  // Add a discreet floating Speaker button in the UI
+  function injectFloatingSpeaker() {
+    if (document.getElementById('ag-speaker-btn')) return;
 
-  function checkForNewResponses() {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(function() {
-      // Find all message containers
-      var candidateElements = document.querySelectorAll(
-        '.markdown, .prose, [data-message-author="assistant"], [role="presentation"] p'
-      );
-      if (candidateElements.length === 0) {
-        candidateElements = document.querySelectorAll('p');
-      }
+    var btn = document.createElement('button');
+    btn.id = 'ag-speaker-btn';
+    btn.innerHTML = '🔊';
+    btn.title = 'Escuchar respuesta en voz alta';
+    btn.style.cssText = [
+      'position: fixed',
+      'top: 14px',
+      'right: 60px',
+      'z-index: 9999',
+      'width: 34px',
+      'height: 34px',
+      'border-radius: 50%',
+      'border: 1px solid rgba(255,255,255,0.2)',
+      'background: rgba(30, 41, 59, 0.85)',
+      'color: #fff',
+      'font-size: 16px',
+      'display: flex',
+      'align-items: center',
+      'justify-content: center',
+      'cursor: pointer',
+      'box-shadow: 0 2px 8px rgba(0,0,0,0.4)',
+      'backdrop-filter: blur(8px)',
+      'transition: all 0.2s ease'
+    ].join(';');
 
-      if (candidateElements.length > 0) {
-        var lastElem = candidateElements[candidateElements.length - 1];
-        var text = (lastElem.innerText || lastElem.textContent || '').trim();
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      btn.style.transform = 'scale(0.9)';
+      setTimeout(function() { btn.style.transform = 'scale(1)'; }, 150);
+      window.__agTts.speakLastResponse();
+    });
 
-        // Check that text is long enough and not from user input box
-        if (text && text.length > 10 && text !== lastSpoken && !lastElem.closest('textarea, [contenteditable="true"]')) {
-          // Verify user is not currently typing / streaming
-          var typingIndicators = document.querySelectorAll('.animate-pulse, [data-testid="send-button-pending"]');
-          if (typingIndicators.length === 0) {
-            lastSpoken = text;
-            console.log('[TTS] Auto-triggering speech for latest response');
-            window.__agTts.speak(text);
-          }
-        }
-      }
-    }, 800); // 800ms debounce after last DOM mutation
+    document.body.appendChild(btn);
+    console.log('[TTS] Floating speaker button injected');
   }
 
-  function startObserver() {
+  // Auto-observer
+  var debounceTimer = null;
+  function onDomMutated() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(function() {
+      injectFloatingSpeaker();
+      var nodes = document.querySelectorAll('p, .markdown, .prose');
+      for (var i = nodes.length - 1; i >= 0; i--) {
+        var node = nodes[i];
+        if (node.closest('textarea, [contenteditable="true"], form, nav')) continue;
+        var txt = (node.innerText || node.textContent || '').trim();
+        if (txt && txt.length > 15 && txt !== lastSpoken) {
+          var typing = document.querySelectorAll('.animate-pulse, [data-testid="send-button-pending"]');
+          if (typing.length === 0) {
+            lastSpoken = txt;
+            if (ttsEnabled) {
+              window.__agTts.speak(txt);
+            }
+          }
+          break;
+        }
+      }
+    }, 900);
+  }
+
+  function start() {
+    injectFloatingSpeaker();
     var target = document.getElementById('root') || document.body;
-    if (!target) return;
-    var observer = new MutationObserver(checkForNewResponses);
-    observer.observe(target, { childList: true, subtree: true, characterData: true });
-    console.log('[TTS] Active mutation observer watching conversation');
+    if (target) {
+      var observer = new MutationObserver(onDomMutated);
+      observer.observe(target, { childList: true, subtree: true, characterData: true });
+    }
   }
 
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(startObserver, 1000);
+    setTimeout(start, 1200);
   } else {
     window.addEventListener('DOMContentLoaded', function() {
-      setTimeout(startObserver, 1000);
+      setTimeout(start, 1200);
     });
   }
 })();
