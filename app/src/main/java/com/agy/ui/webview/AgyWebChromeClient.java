@@ -73,19 +73,33 @@ public final class AgyWebChromeClient extends WebChromeClient {
      * Without this override the WebView silently denies all media capture requests.
      */
     @Override
-    public void onPermissionRequest(PermissionRequest request) {
-        String[] resources = request.getResources();
-        java.util.List<String> granted = new java.util.ArrayList<>();
+    public void onPermissionRequest(final PermissionRequest request) {
+        Log.i(TAG, "onPermissionRequest origin: " + request.getOrigin());
+        final String[] resources = request.getResources();
+        final java.util.List<String> granted = new java.util.ArrayList<>();
         for (String res : resources) {
+            Log.i(TAG, "Permission requested for resource: " + res);
             if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(res) ||
                     PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(res)) {
                 granted.add(res);
             }
         }
-        if (!granted.isEmpty()) {
-            request.grant(granted.toArray(new String[0]));
-        } else {
-            request.deny();
-        }
+        android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (!granted.isEmpty()) {
+                        Log.i(TAG, "Granting WebView permissions: " + granted);
+                        request.grant(granted.toArray(new String[0]));
+                    } else {
+                        Log.w(TAG, "Denying WebView permission request: no matching audio/video resource");
+                        request.deny();
+                    }
+                } catch (Throwable t) {
+                    Log.e(TAG, "Error handling PermissionRequest: " + t.getMessage(), t);
+                }
+            }
+        });
     }
 }

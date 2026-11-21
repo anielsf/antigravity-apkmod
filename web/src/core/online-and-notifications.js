@@ -43,3 +43,19 @@ try {
   };
   global.Notification = FakeNotification;
 } catch (e) { warn('notification-polyfill', e); }
+
+// Tap navigator.mediaDevices.getUserMedia for diagnostics
+if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+  var origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  navigator.mediaDevices.getUserMedia = function(constraints) {
+    console.log('[MIC DEBUG] getUserMedia called with:', JSON.stringify(constraints));
+    return origGUM(constraints).then(function(stream) {
+      console.log('[MIC DEBUG] getUserMedia SUCCESS, tracks:', stream.getAudioTracks().length);
+      return stream;
+    }).catch(function(err) {
+      console.error('[MIC DEBUG] getUserMedia ERROR:', err && err.name, err && err.message);
+      alert('Error de Microfono: ' + (err ? (err.name + ': ' + err.message) : 'desconocido'));
+      throw err;
+    });
+  };
+}

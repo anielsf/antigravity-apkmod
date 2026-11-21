@@ -137,6 +137,16 @@ def patch_main(file_path):
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
 
+    
+    if "canUploadAudio:m" in content:
+        content = content.replace("canUploadAudio:m", "canUploadAudio:!0")
+        changed = True
+        print("[web-patch] Forced canUploadAudio:!0")
+    if "canUploadAudio:w" in content:
+        content = content.replace("canUploadAudio:w", "canUploadAudio:!0")
+        changed = True
+        print("[web-patch] Forced canUploadAudio:!0 in DYb")
+
     return True
 
 if __name__ == "__main__":
