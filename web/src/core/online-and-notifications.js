@@ -44,18 +44,34 @@ try {
   global.Notification = FakeNotification;
 } catch (e) { warn('notification-polyfill', e); }
 
-// Tap navigator.mediaDevices.getUserMedia for diagnostics
+// Robust getUserMedia shim: handles device constraint mismatches and NotReadableError on Android WebView
 if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-  var origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  var nativeGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
   navigator.mediaDevices.getUserMedia = function(constraints) {
-    console.log('[MIC DEBUG] getUserMedia called with:', JSON.stringify(constraints));
-    return origGUM(constraints).then(function(stream) {
-      console.log('[MIC DEBUG] getUserMedia SUCCESS, tracks:', stream.getAudioTracks().length);
+    console.log('[MIC] Requesting audio with constraints:', JSON.stringify(constraints));
+    
+    // First try with provided constraints
+    return nativeGUM(constraints).catch(function(err) {
+      console.warn('[MIC] Primary getUserMedia failed (' + (err && err.name) + '), attempting fallback constraints...', err);
+      // Fallback 1: minimal audio constraint (fixes NotReadableError when sampleRate 48kHz or echoCancellation is rejected by Android hardware)
+      var fallbackConstraints = { audio: true };
+      return nativeGUM(fallbackConstraints).catch(function(err2) {
+        console.warn('[MIC] Fallback 1 failed (' + (err2 && err2.name) + '), trying device-specific search...', err2);
+        // Fallback 2: find specific audioinput device
+        if (navigator.mediaDevices.enumerateDevices) {
+          return navigator.mediaDevices.enumerateDevices().then(function(devices) {
+            var audioDev = devices.find(function(d) { return d.kind === 'audioinput'; });
+            if (audioDev && audioDev.deviceId) {
+              return nativeGUM({ audio: { deviceId: { exact: audioDev.deviceId } } });
+            }
+            throw err2;
+          });
+        }
+        throw err2;
+      });
+    }).then(function(stream) {
+      console.log('[MIC] Audio stream successfully acquired. Tracks:', stream.getAudioTracks().length);
       return stream;
-    }).catch(function(err) {
-      console.error('[MIC DEBUG] getUserMedia ERROR:', err && err.name, err && err.message);
-      alert('Error de Microfono: ' + (err ? (err.name + ': ' + err.message) : 'desconocido'));
-      throw err;
     });
   };
 }
