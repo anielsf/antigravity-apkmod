@@ -147,6 +147,18 @@ def patch_main(file_path):
         changed = True
         print("[web-patch] Forced canUploadAudio:!0 in DYb")
 
+    
+    # 6. Enable Live Voice & Audio Transcription streaming
+    if "enabled:nk(a,\"enable-audio-transcription\")" in content:
+        content = content.replace("enabled:nk(a,\"enable-audio-transcription\")", "enabled:!0")
+        changed = True
+        print("[web-patch] Enabled streamingAudioFeature (Live Audio Streaming)")
+
+    if "visibilityCustomFlag:\"enable-concierge-agent\"" in content:
+        content = content.replace("visibilityCustomFlag:\"enable-concierge-agent\"", "visibilityCustomFlag:\"\"")
+        changed = True
+        print("[web-patch] Unlocked Chief of Staff (Concierge Agent) settings visibility")
+
     return True
 
 if __name__ == "__main__":
