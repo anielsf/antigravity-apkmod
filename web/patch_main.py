@@ -148,16 +148,24 @@ def patch_main(file_path):
         print("[web-patch] Forced canUploadAudio:!0 in DYb")
 
     
-    # 6. Enable Live Voice & Audio Transcription streaming
+    # 6. Enable Live Voice & Audio Transcription streaming with resilient AudioContext
     if "enabled:nk(a,\"enable-audio-transcription\")" in content:
         content = content.replace("enabled:nk(a,\"enable-audio-transcription\")", "enabled:!0")
         changed = True
         print("[web-patch] Enabled streamingAudioFeature (Live Audio Streaming)")
 
-    if "visibilityCustomFlag:\"enable-concierge-agent\"" in content:
-        content = content.replace("visibilityCustomFlag:\"enable-concierge-agent\"", "visibilityCustomFlag:\"\"")
+    # Fix getUserMedia strict 48kHz constraint in audio streaming caller
+    if "sampleRate:{ideal:48E3},echoCancellation:!0,noiseSuppression:!0" in content:
+        content = content.replace(
+            "sampleRate:{ideal:48E3},echoCancellation:!0,noiseSuppression:!0",
+            "echoCancellation:!0,noiseSuppression:!0"
+        )
         changed = True
-        print("[web-patch] Unlocked Chief of Staff (Concierge Agent) settings visibility")
+        print("[web-patch] Relaxed sampleRate constraint in audio streaming getUserMedia")
+
+    if changed:
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(content)
 
     return True
 
