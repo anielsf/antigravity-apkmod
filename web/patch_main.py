@@ -142,10 +142,10 @@ def patch_main(file_path):
         content = content.replace("canUploadAudio:m", "canUploadAudio:!0")
         changed = True
         print("[web-patch] Forced canUploadAudio:!0")
-    if "canUploadAudio:w" in content:
-        content = content.replace("canUploadAudio:w", "canUploadAudio:!0")
+    if "canUploadAudio:w=true" not in content and "canUploadAudio:w" in content:
+        content = content.replace("canUploadAudio:w", "canUploadAudio:w=!0")
         changed = True
-        print("[web-patch] Forced canUploadAudio:!0 in DYb")
+        print("[web-patch] Forced canUploadAudio default !0 in DYb destructuring")
 
     
     # 6. Enable Live Voice & Audio Transcription streaming with resilient AudioContext
